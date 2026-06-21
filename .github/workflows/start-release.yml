@@ -38,7 +38,9 @@ jobs:
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
 
       - name: Create release branch
-        run: ./etc/scripts/release/start-release.sh "${{ inputs.bump_type }}"
+        env:
+          BUMP_TYPE: ${{ inputs.bump_type }}
+        run: ./etc/scripts/release/start-release.sh "$BUMP_TYPE"
 
       - name: Run version sync
         env:

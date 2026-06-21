@@ -37,8 +37,8 @@ jobs:
       - name: Validate and prepare
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
           RELEASE_BRANCH="releases/v${VERSION}"
 
           # Validate semver format
@@ -63,8 +63,8 @@ jobs:
       - name: Validate version and tag
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
           TAG="v${VERSION}"
 
           # Validate Cargo.toml version using cargo metadata via common.sh
@@ -92,7 +92,9 @@ jobs:
           fi
 
       - name: Create and push tag
-        run: ./etc/scripts/release/create-tag.sh "releases/v${{ inputs.version }}" final
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./etc/scripts/release/create-tag.sh "releases/v$VERSION" final
 
       - name: Read tag
         id: read-tag
