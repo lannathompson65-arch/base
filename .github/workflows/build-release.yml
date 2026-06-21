@@ -91,9 +91,10 @@ jobs:
           cargo build --locked --profile maxperf "${cargo_args[@]}"
 
       - name: Package binaries
+        env:
+          TAG: ${{ inputs.tag }}
+          TARGET: ${{ matrix.target.triple }}
         run: |
-          TAG="${{ inputs.tag }}"
-          TARGET="${{ matrix.target.triple }}"
           while IFS= read -r bin; do
             [[ -n "$bin" ]] || continue
             ARCHIVE="${bin}-${TAG}-${TARGET}.tar.gz"
@@ -146,11 +147,13 @@ jobs:
 
       - name: Prepare image labels
         id: image-labels
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
           echo "source=https://github.com/${{ github.repository }}" >> $GITHUB_OUTPUT
           echo "revision=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
-          echo "version=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          echo "version=$TAG" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
@@ -226,16 +229,18 @@ jobs:
 
       - name: Determine Docker tags
         id: tags
+        env:
+          TAG: ${{ inputs.tag }}
+          REGISTRY_IMAGE: ${{ env.REGISTRY_IMAGE }}
         run: |
-          TAG="${{ inputs.tag }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
           if [[ "$TAG" =~ -rc\. ]]; then
-            echo "docker_tags=${{ env.REGISTRY_IMAGE }}:${TAG}" >> $GITHUB_OUTPUT
+            echo "docker_tags=${REGISTRY_IMAGE}:${TAG}" >> $GITHUB_OUTPUT
           else
             VERSION="${TAG#v}"
             IFS='.' read -r major minor patch <<< "$VERSION"
-            echo "docker_tags=${{ env.REGISTRY_IMAGE }}:${TAG},${{ env.REGISTRY_IMAGE }}:${major}.${minor},${{ env.REGISTRY_IMAGE }}:${major},${{ env.REGISTRY_IMAGE }}:latest" >> $GITHUB_OUTPUT
+            echo "docker_tags=${REGISTRY_IMAGE}:${TAG},${REGISTRY_IMAGE}:${major}.${minor},${REGISTRY_IMAGE}:${major},${REGISTRY_IMAGE}:latest" >> $GITHUB_OUTPUT
           fi
 
       - name: Create manifest list and push
@@ -265,8 +270,8 @@ jobs:
         if: inputs.is_final
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
         run: |
-          TAG="${{ inputs.tag }}"
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "GitHub Release $TAG already exists, skipping creation"
           else
@@ -285,18 +290,21 @@ jobs:
         if: inputs.is_final
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          BINARIES_PATH: ${{ runner.temp }}/binaries
         run: |
-          TAG="${{ inputs.tag }}"
-          gh release upload "$TAG" ${{ runner.temp }}/binaries/*.tar.gz ${{ runner.temp }}/binaries/*.tar.gz.sha256
+          gh release upload "$TAG" $BINARIES_PATH/*.tar.gz $BINARIES_PATH/*.tar.gz.sha256
 
       - name: Summary
+        env:
+          TAG: ${{ inputs.tag }}
+          IS_FINAL: ${{ inputs.is_final }}
+          REGISTRY_IMAGE: ${{ env.REGISTRY_IMAGE }}
         run: |
-          TAG="${{ inputs.tag }}"
-
           echo "## Release Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Tag**: \`$TAG\`" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ inputs.is_final }}" == "true" ]]; then
+          if [[ "$IS_FINAL" == "true" ]]; then
             echo "**Type**: Final Release" >> $GITHUB_STEP_SUMMARY
           else
             echo "**Type**: Release Candidate" >> $GITHUB_STEP_SUMMARY
@@ -305,5 +313,5 @@ jobs:
           echo "### Docker Images" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY_IMAGE }}:${TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${REGISTRY_IMAGE}:${TAG}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
